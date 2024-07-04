@@ -1,5 +1,5 @@
 import json
-import time
+import os
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from config import Config
@@ -12,45 +12,45 @@ bot = Client(
     api_hash=Config.API_HASH
 )
 
-# Load JSON data
-json_data = '''
-[{"batch": "74 Biology (12th Class) (KUMAREDUTAINMENT)", "index": "1", "chatid": -1002079646989, "msgid": 294059, "title": "Sexual Reproduction in Flowering Plants Part-11", "topic": "74 Biology (12th Class) (KUMAREDUTAINMENT)"}, {"batch": "74 Biology (12th Class) (KUMAREDUTAINMENT)", "index": "2", "chatid": -1002079646989, "msgid": 294049, "title": "Sexual Reproduction in Flowering Plants Part-11_notes", "topic": "74 Biology (12th Class) (KUMAREDUTAINMENT)"}, ... ]
-'''
+# Store the loaded messages
+messages = []
 
-# Parse JSON data
-messages = json.loads(json_data)
+# Load the JSON data from the file
+def load_json_data():
+    global messages
+    with open("data.json", "r") as file:
+        messages = json.load(file)
 
-@bot.on_message(
-    filters.chat(Config.AUTH_USERS) & filters.private &
-    filters.incoming & filters.command("startforward", prefixes=["/", "!", "."])
-)
-async def start_forwarding(bot: Client, m: Message):
-    await m.reply_text("Starting to forward messages...")
+# Command to start the bot
+@bot.on_message(filters.command("start") & filters.user(Config.AUTH_USERS))
+async def start(client, message):
+    await message.reply_text("Bot started! Use /forward to begin forwarding messages.")
 
-    # Iterate through each message in the JSON data
-    for message_info in messages:
-        chat_id = message_info["chatid"]
-        message_id = message_info["msgid"]
-        title = message_info["title"]
+# Command to initiate forwarding
+@bot.on_message(filters.command("forward") & filters.user(Config.AUTH_USERS))
+async def forward_messages(client, message):
+    load_json_data()  # Load the JSON data
 
+    await message.reply_text("Send the channel ID where you want to forward the messages:")
+
+    # Wait for the user to reply with the target channel ID
+    response = await bot.listen(message.chat.id)
+    target_channel_id = int(response.text)
+
+    await message.reply_text("Forwarding messages...")
+
+    # Forward the messages to the target channel
+    for msg in messages:
         try:
-            # Forward the message to the target channel
-            await bot.forward_messages(
-                chat_id=Config.TARGET_CHAT_ID,
-                from_chat_id=chat_id,
-                message_ids=message_id
+            await client.copy_message(
+                chat_id=target_channel_id,
+                from_chat_id=msg["chatid"],
+                message_id=msg["msgid"]
             )
-            await bot.send_message(
-                chat_id=Config.TARGET_CHAT_ID,
-                text=f"Title: {title}"
-            )
-
-            # Optional: Add a delay between forwarding messages to avoid hitting rate limits
-            time.sleep(2)
         except Exception as e:
-            await m.reply_text(f"Error forwarding message {message_id}: {e}")
+            await message.reply_text(f"Failed to forward message ID {msg['msgid']}: {e}")
 
-    await m.reply_text("Done forwarding all messages.")
+    await message.reply_text("Done forwarding messages.")
 
-if __name__ == "__main__":
-    bot.run()
+# Start the bot
+bot.run()
