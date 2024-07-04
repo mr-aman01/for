@@ -1,7 +1,7 @@
 import json
 import os
 from pyrogram import Client, filters
-from pyrogram.types import Message, InputFile
+from pyrogram.types import Message
 from config import Config
 
 # Initialize the bot client
@@ -32,8 +32,8 @@ async def forward_messages(client, message):
     await message.reply_text("Please upload the data.json file.")
     
     # Wait for the user to upload the data.json file
-    response = await bot.listen(message.chat.id)
-    
+    response = await bot.ask(message.chat.id, "Upload the data.json file:")
+
     # Check if the response contains a document (file)
     if response.document:
         file_path = await response.download()
@@ -46,7 +46,7 @@ async def forward_messages(client, message):
     await message.reply_text("Send the channel ID where you want to forward the messages:")
 
     # Wait for the user to reply with the target channel ID
-    response = await bot.listen(message.chat.id)
+    response = await bot.ask(message.chat.id, "Provide the target channel ID:")
     target_channel_id = int(response.text)
 
     await message.reply_text("Forwarding messages...")
