@@ -32,37 +32,41 @@ async def forward_messages(client, message):
     await message.reply_text("Please upload the data.json file.")
     
     # Wait for the user to upload the data.json file
-    response = await bot.ask(message.chat.id, "Upload the data.json file:")
+    @bot.on_message(filters.document & filters.user(Config.AUTH_USERS))
+    async def handle_document(client, document_message):
+        if document_message.document.file_name == "data.json":
+            file_path = await document_message.download()
+            await load_json_data(file_path)  # Load the JSON data from the file
+            os.remove(file_path)  # Clean up the file after loading
 
-    # Check if the response contains a document (file)
-    if response.document:
-        file_path = await response.download()
-        await load_json_data(file_path)  # Load the JSON data from the file
-        os.remove(file_path)  # Clean up the file after loading
-    else:
-        await message.reply_text("No file uploaded. Please try again.")
-        return
+            await message.reply_text("Send the channel ID where you want to forward the messages:")
+            
+            # Wait for the user to reply with the target channel ID
+            @bot.on_message(filters.text & filters.user(Config.AUTH_USERS))
+            async def handle_channel_id(client, channel_id_message):
+                target_channel_id = int(channel_id_message.text)
+                
+                await message.reply_text("Forwarding messages...")
 
-    await message.reply_text("Send the channel ID where you want to forward the messages:")
+                # Forward the messages to the target channel
+                for msg in messages:
+                    try:
+                        await client.copy_message(
+                            chat_id=target_channel_id,
+                            from_chat_id=msg["chatid"],
+                            message_id=msg["msgid"]
+                        )
+                    except Exception as e:
+                        await message.reply_text(f"Failed to forward message ID {msg['msgid']}: {e}")
 
-    # Wait for the user to reply with the target channel ID
-    response = await bot.ask(message.chat.id, "Provide the target channel ID:")
-    target_channel_id = int(response.text)
+                await message.reply_text("Done forwarding messages.")
+                # Remove the inner handler after use
+                bot.remove_handler(handle_channel_id)
 
-    await message.reply_text("Forwarding messages...")
-
-    # Forward the messages to the target channel
-    for msg in messages:
-        try:
-            await client.copy_message(
-                chat_id=target_channel_id,
-                from_chat_id=msg["chatid"],
-                message_id=msg["msgid"]
-            )
-        except Exception as e:
-            await message.reply_text(f"Failed to forward message ID {msg['msgid']}: {e}")
-
-    await message.reply_text("Done forwarding messages.")
+        else:
+            await message.reply_text("Uploaded file is not data.json. Please try again.")
+        # Remove the inner handler after use
+        bot.remove_handler(handle_document)
 
 # Start the bot
 bot.run()
