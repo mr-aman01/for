@@ -1,6 +1,8 @@
 import json
 import os
+import time
 from pyrogram import Client, filters
+from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 from config import Config
 
@@ -29,12 +31,12 @@ async def start(client, message):
 # Command to initiate forwarding
 @bot.on_message(filters.command("forward") & filters.user(Config.AUTH_USERS))
 async def forward_messages(client, message):
-    await message.reply_text("Please upload the data.json file.")
+    await message.reply_text("Please upload the JSON file.")
     
-    # Wait for the user to upload the data.json file
+    # Wait for the user to upload the JSON file
     @bot.on_message(filters.document & filters.user(Config.AUTH_USERS))
     async def handle_document(client, document_message):
-        if document_message.document.file_name == "data.json":
+        if document_message.document.file_name.endswith(".json"):
             file_path = await document_message.download()
             await load_json_data(file_path)  # Load the JSON data from the file
             os.remove(file_path)  # Clean up the file after loading
@@ -50,22 +52,28 @@ async def forward_messages(client, message):
 
                 # Forward the messages to the target channel
                 for msg in messages:
-                    try:
-                        await client.get_chat(target_channel_id)  # Ensure the bot has met the target channel
-                        await client.copy_message(
-                            chat_id=target_channel_id,
-                            from_chat_id=msg["chatid"],
-                            message_id=msg["msgid"]
-                        )
-                    except Exception as e:
-                        await message.reply_text(f"Failed to forward message ID {msg['msgid']}: {e}")
+                    while True:
+                        try:
+                            await client.get_chat(target_channel_id)  # Ensure the bot has met the target channel
+                            await client.copy_message(
+                                chat_id=target_channel_id,
+                                from_chat_id=msg["chatid"],
+                                message_id=msg["msgid"]
+                            )
+                            break
+                        except FloodWait as e:
+                            await message.reply_text(f"Rate limit exceeded. Waiting for {e.value} seconds.")
+                            time.sleep(e.value)
+                        except Exception as e:
+                            await message.reply_text(f"Failed to forward message ID {msg['msgid']}: {e}")
+                            break
 
                 await message.reply_text("Done forwarding messages.")
                 # Remove the inner handler after use
                 bot.remove_handler(handle_channel_id)
 
         else:
-            await message.reply_text("Uploaded file is not data.json. Please try again.")
+            await message.reply_text("Uploaded file is not a JSON file. Please try again.")
         # Remove the inner handler after use
         bot.remove_handler(handle_document)
 
