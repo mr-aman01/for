@@ -51,6 +51,7 @@ async def forward_messages(client, message):
                 # Forward the messages to the target channel
                 for msg in messages:
                     try:
+                        await client.get_chat(target_channel_id)  # Ensure the bot has met the target channel
                         await client.copy_message(
                             chat_id=target_channel_id,
                             from_chat_id=msg["chatid"],
